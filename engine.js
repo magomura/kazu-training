@@ -1,12 +1,26 @@
 /* Pure learning logic: no DOM, network, or storage dependency. */
 (function (root) {
   'use strict';
+  const Collection = typeof module !== 'undefined' && module.exports ? require('./collection.js') : root.Collection;
   const TYPES = ['compare', 'order', 'complement', 'split10', 'parts'];
   const NEXT_TYPES = ['tens', 'add20', 'sub20', 'addBridge', 'subBridge'];
-  const ALL_TYPES = [...TYPES, ...NEXT_TYPES];
+  const THIRD_TYPES = ['missingAdd', 'missingSub'];
+  const OLD_TYPES = [...TYPES, ...NEXT_TYPES];
+  const ALL_TYPES = [...OLD_TYPES, ...THIRD_TYPES];
   const LABELS = { compare: '数の大小', order: '数の順番', complement: 'あといくつで10', split10: '10の分け方', parts: '数の分解と合成', tens: '10といくつ', add20: '20までの足し算', sub20: '20までの引き算', addBridge: '10をこえる足し算', subBridge: '10をまたぐ引き算' };
   const integer = (min, max, rng = Math.random) => min + Math.floor(rng() * (max - min + 1));
+  LABELS.missingAdd = '足す数を見つけよう'; LABELS.missingSub = 'ひく数を見つけよう';
   function generate(type, rng = Math.random) {
+    if (THIRD_TYPES.includes(type)) {
+      const base = generateNext(type === 'missingAdd' ? 'addBridge' : 'subBridge', rng);
+      return { ...base, type, answer: base.b, result: base.answer, compose: false, subtract: false,
+        prompt: type === 'missingAdd' ? 'いくつ足すと この数になる？' : 'いくつひくと この数になる？',
+        expression: `${base.a} ${type === 'missingAdd' ? '＋' : '−'} □ ＝ ${base.answer}`,
+        a: type === 'missingAdd' ? base.a : base.answer,
+        hint: '緑の丸と白い丸で全体になるよ。白い丸の数を考えよう。',
+        explanation: type === 'missingAdd' ? `${base.a}に${10 - base.a}を足すと10。あと${base.answer - 10}で${base.answer}。足した数は${base.b}。` : `${base.a}から${base.a - 10}をひくと10。あと${10 - base.answer}をひくと${base.answer}。ひいた数は${base.b}。`,
+        prerequisite: part(10, type === 'missingAdd' ? base.a : base.answer) };
+    }
     if (NEXT_TYPES.includes(type)) return generateNext(type, rng);
     const a = integer(1, 9, rng);
     if (type === 'compare') {
@@ -29,7 +43,20 @@
     }
     throw new Error('Unknown question type');
   }
+  function part(total, a) { return { type: 'parts', support: true, total, a, answer: total - a, prompt: `${total}は ${a}と いくつ？`, expression: `${total} ＝ ${a} ＋ □`, visual: 'frame', hint: '白い丸を数えてみよう。', explanation: `${a}と${total - a}で${total}になるね。` }; }
+  function supportSteps(q) {
+    if (q.type === 'addBridge') {
+      const need = 10 - q.a, rest = q.b - need;
+      return [q.prerequisite, part(q.b, need), { ...part(10 + rest, 10), compose: true, answer: 10 + rest, prompt: '10と のこりを あわせると？', expression: `10 ＋ ${rest} ＝ □`, hint: '10のまとまりと、のこりの丸をあわせよう。', explanation: `10と${rest}で${10 + rest}だね。` }];
+    }
+    if (q.type === 'subBridge') {
+      const first = q.a - 10, rest = q.b - first;
+      return [q.prerequisite, part(q.b, first), { ...part(10, rest), subtract: true, b: rest, a: 10, prompt: '10から のこりを ひこう', expression: `10 − ${rest} ＝ □`, hint: '線で消した丸をのぞいて数えよう。', explanation: `10から${rest}をひくと${q.answer}だね。` }];
+    }
+    return [support(q)];
+  }
   function support(q) {
+    if (THIRD_TYPES.includes(q.type)) return q.prerequisite;
     if (NEXT_TYPES.includes(q.type)) return q.prerequisite;
     if (q.type === 'compare') return { ...q, support: true, prompt: `${q.bigger ? '右' : '左'}にある数は どっち？`, hint: '数の線の位置を見てみよう。' };
     if (q.type === 'order') return { ...q, support: true, prompt: q.blank === 0 ? `${q.a + 1}の ひとつ前は？` : `${q.answer - 1}の ひとつ次は？`, expression: q.blank === 0 ? `□ ← ${q.a + 1}` : `${q.answer - 1} → □` };
@@ -40,11 +67,12 @@
     const pool = review.length && rng() < .3 ? review : available;
     return pool[integer(0, pool.length - 1, rng)];
   }
-  function createState() { return { version: 2, total: 0, correct: 0, lastStudyDate: null, days: {}, types: Object.fromEntries(ALL_TYPES.map(t => [t, { total: 0, correct: 0, misses: 0 }])), recent: [], bright: 0 }; }
+  function createState() { return { version: 3, total: 0, correct: 0, lastStudyDate: null, days: {}, types: Object.fromEntries(ALL_TYPES.map(t => [t, { total: 0, correct: 0, misses: 0 }])), recent: [], bright: 0, collection: Collection.create() }; }
   const count = n => Number.isSafeInteger(n) && n >= 0;
   function validState(s) {
-    const base = [1, 2].includes(s?.version) && count(s.total) && count(s.correct) && s.correct <= s.total && (s.lastStudyDate === null || /^\d{4}-\d{2}-\d{2}$/.test(s.lastStudyDate)) && s.days && typeof s.days === 'object' && !Array.isArray(s.days) && Object.entries(s.days).every(([d, n]) => /^\d{4}-\d{2}-\d{2}$/.test(d) && count(n)) && (s.version === 1 ? TYPES : ALL_TYPES).every(t => s.types?.[t] && ['total', 'correct', 'misses'].every(k => count(s.types[t][k])) && s.types[t].correct <= s.types[t].total);
-    return Boolean(base && (s.version === 1 || (count(s.bright) && Array.isArray(s.recent) && s.recent.length <= 5 && s.recent.every(r => [1, 2].includes(r.level) && count(r.correct) && r.correct <= 10))));
+    const schemaTypes = s?.version === 1 ? TYPES : s?.version === 2 ? OLD_TYPES : ALL_TYPES;
+    const base = [1, 2, 3].includes(s?.version) && count(s.total) && count(s.correct) && s.correct <= s.total && (s.lastStudyDate === null || /^\d{4}-\d{2}-\d{2}$/.test(s.lastStudyDate)) && s.days && typeof s.days === 'object' && !Array.isArray(s.days) && Object.entries(s.days).every(([d, n]) => /^\d{4}-\d{2}-\d{2}$/.test(d) && count(n)) && schemaTypes.every(t => s.types?.[t] && ['total', 'correct', 'misses'].every(k => count(s.types[t][k])) && s.types[t].correct <= s.types[t].total);
+    return Boolean(base && (s.version === 1 || (count(s.bright) && Array.isArray(s.recent) && s.recent.length <= 5 && s.recent.every(r => (s.version === 2 ? [1, 2] : [1, 2, 3]).includes(r.level) && count(r.correct) && r.correct <= 10))) && (s.version !== 3 || Collection.valid(s.collection)));
   }
   function migrate(s) {
     if (!validState(s)) throw new Error('Invalid saved history');
@@ -53,15 +81,20 @@
       next.version = 2; next.recent = []; next.bright = 0;
       NEXT_TYPES.forEach(t => { next.types[t] = { total: 0, correct: 0, misses: 0 }; });
     }
+    if (next.version === 2) {
+      next.version = 3; next.collection = Collection.create();
+      THIRD_TYPES.forEach(t => { next.types[t] = { total: 0, correct: 0, misses: 0 }; });
+    }
     return next;
   }
   function bridgeReady(state) {
     const last = state.recent.filter(r => r.level === 2).at(-1);
     return Boolean(last && last.correct >= 8);
   }
-  function completeSession(state, level, correct) {
+  function completeSession(state, level, correct, recovered = 0, date = state.lastStudyDate, rng = Math.random) {
     state.recent = [...state.recent, { level, correct }].slice(-5);
     if (correct >= 8) state.bright++;
+    return Collection.finish(state.collection, { level, correct, recovered, date }, rng);
   }
   function schedule(state, level, rng = Math.random) {
     const shuffle = values => {
@@ -69,6 +102,12 @@
       return values;
     };
     if (level === 1) return [...shuffle([...TYPES]), ...Array.from({ length: 5 }, () => chooseType(state.types, rng))];
+    if (level === 3) {
+      const last = state.recent.filter(r => r.level === 3).at(-1);
+      const gentle = last && last.correct <= 5;
+      const pool = ['addBridge', 'subBridge', 'missingAdd', 'missingSub'];
+      return [...shuffle(['tens', 'sub20']), ...shuffle(['addBridge', 'subBridge']), ...shuffle(gentle ? ['complement', 'parts'] : ['missingAdd', 'missingSub']), ...Array.from({ length: 4 }, () => chooseType(state.types, rng, gentle ? ['add20', 'sub20', 'addBridge', 'subBridge'] : pool))];
+    }
     const basic = ['tens', 'add20', 'sub20'];
     return [...shuffle(['complement', 'parts']), ...shuffle([...basic]), ...Array.from({ length: 3 }, () => chooseType(state.types, rng, basic)), ...(bridgeReady(state) ? shuffle(['addBridge', 'subBridge']) : Array.from({ length: 2 }, () => chooseType(state.types, rng, basic)))];
   }
@@ -104,7 +143,7 @@
     const type = state.types[q.type]; type.total++; type.correct += mistakes === 0 ? 1 : 0; type.misses += mistakes;
     state.days[date] = (state.days[date] || 0) + 1; state.lastStudyDate = date;
   }
-  const api = { TYPES, NEXT_TYPES, ALL_TYPES, LABELS, generate, support, chooseType, createState, validState, migrate, record, schedule, bridgeReady, completeSession };
+  const api = { TYPES, NEXT_TYPES, THIRD_TYPES, ALL_TYPES, LABELS, generate, support, supportSteps, chooseType, createState, validState, migrate, record, schedule, bridgeReady, completeSession };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kazu = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
