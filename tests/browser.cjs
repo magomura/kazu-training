@@ -13,7 +13,7 @@ const path = require('node:path');
       res.end(fs.readFileSync(path.join(process.env.TEST_FONT_DIR, 'files', path.basename(pathname)))); return;
     }
     const file = pathname === '/' ? 'index.html' : pathname.slice(1);
-    if (!['index.html', 'app.js', 'engine.js', 'journey.js', 'styles.css', 'icon.svg'].includes(file)) { res.writeHead(404); res.end(); return; }
+    if (!['index.html', 'app.js', 'engine.js', 'collection.js', 'journey.js', 'styles.css', 'icon.svg'].includes(file)) { res.writeHead(404); res.end(); return; }
     const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
     res.setHeader('Content-Type', mime[path.extname(file)]);
     res.end(fs.readFileSync(path.join(__dirname, '..', file)));
@@ -87,7 +87,7 @@ const path = require('node:path');
   await page.reload();
   assert.equal(await page.evaluate(() => history.total), 30);
   assert.equal(await page.evaluate(() => history.correct), 29);
-  assert.match(await page.locator('.journey-heading').innerText(), /3 \/ 6/);
+  assert.match(await page.locator('.journey-heading').innerText(), /3 \/ 36/);
   // Migration doesn't touch the stored original until a completed question is saved.
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem(KEY)).version), 1);
   await page.locator('#start-next').click();
@@ -106,7 +106,7 @@ const path = require('node:path');
   assert.equal(await page.evaluate(() => history.bright), 1);
   assert.equal(await page.evaluate(() => history.total), 40);
   await page.locator('#album').click();
-  assert.equal(await page.locator('.postcard svg').count(), 4);
+  assert.equal(await page.locator('[data-kind="legacy"] svg').count(), 4);
   await page.screenshot({ path: '/tmp/kazu-v02-album.png', fullPage: true });
   await page.locator('#home').click();
   await page.screenshot({ path: '/tmp/kazu-v02-home.png', fullPage: true });
@@ -122,6 +122,10 @@ const path = require('node:path');
   assert.match(await page.locator('#feedback').innerText(), /そう、その数/);
   assert.equal(await page.evaluate(() => history.total), 40);
   await page.locator('#continue').click();
+  while (await page.evaluate(() => session.mode === 'support')) {
+    const answer = await page.evaluate(() => activeQuestion().answer);
+    await page.locator('#answer').fill(String(answer)); await page.locator('#answer-form button').click(); await page.locator('#continue').click();
+  }
   await page.locator('#answer').fill(String(mainAnswer)); await page.locator('#answer-form button').click();
   assert.equal(await page.evaluate(() => history.total), 41);
   assert.equal(await page.evaluate(() => history.correct), 39);
@@ -131,7 +135,7 @@ const path = require('node:path');
     await page.setViewportSize({ width, height: 844 });
     for (const type of ['tens', 'add20', 'sub20', 'addBridge', 'subBridge']) {
       for (const mode of ['main', 'support']) {
-        await page.evaluate(({ type, mode }) => { session.question = Kazu.generate(type, () => .999); session.mode = mode; renderQuestion(); }, { type, mode });
+        await page.evaluate(({ type, mode }) => { session.question = Kazu.generate(type, () => .999); session.supportIndex = 0; session.mode = mode; renderQuestion(); }, { type, mode });
         if (mode === 'main') await page.locator('#show-hint').click();
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}: ${type}/${mode} overflow`);
       }
@@ -154,6 +158,79 @@ const path = require('node:path');
   assert.equal(await page.evaluate(() => history.bright), 0);
   assert.match(await page.locator('.reward').innerText(), /新しい景色/);
   assert.equal(await page.locator('.shooting-star').count(), 0);
+  // v0.3: preserve an established v2 user's history and all six original scenes.
+  await page.evaluate(() => {
+    const old = Kazu.createState(); old.version = 2; delete old.collection;
+    Kazu.THIRD_TYPES.forEach(t => delete old.types[t]);
+    old.total = 330; old.correct = 320; old.bright = 27;
+    old.types.add20 = { total: 330, correct: 320, misses: 10 };
+    old.recent = [{ level: 2, correct: 10 }];
+    localStorage.setItem(KEY, JSON.stringify(old));
+  });
+  await page.reload();
+  assert.equal(await page.evaluate(() => history.total), 330);
+  assert.equal(await page.evaluate(() => history.bright), 27);
+  await page.locator('#album').click();
+  assert.equal(await page.locator('[data-kind="legacy"] svg').count(), 6);
+  assert.equal(await page.locator('.collection-card').count(), 36);
+  await page.locator('#home').click();
+  const completeTen = async () => {
+    for (let i = 0; i < 10; i++) {
+      const answer = await page.evaluate(() => session.question.answer);
+      await page.locator('#answer').fill(String(answer)); await page.locator('#answer-form button').click();
+      await page.locator('#continue').click();
+    }
+  };
+  await page.evaluate(() => { Math.random = () => .99; });
+  await page.locator('#start-third').click(); await completeTen();
+  assert.equal(await page.evaluate(() => history.total), 340);
+  assert.equal(await page.evaluate(() => history.collection.completed), 1);
+  assert.equal(await page.evaluate(() => history.collection.streaks[3]), 1);
+  assert.ok(await page.evaluate(() => history.collection.owned.includes('place-0')));
+  const awardedState = await page.evaluate(() => JSON.stringify(history.collection));
+  await page.evaluate(() => { finish(); finish(); });
+  assert.equal(await page.evaluate(() => JSON.stringify(history.collection)), awardedState);
+  await page.reload();
+  assert.equal(await page.evaluate(() => history.collection.streaks[3]), 1);
+  // An unfinished attempt cannot be abandoned to preserve a perfect run.
+  await page.locator('#start-third').click(); await page.reload();
+  assert.equal(await page.evaluate(() => history.collection.streaks[3]), 0);
+  assert.ok(await page.evaluate(() => history.collection.owned.includes('place-0')));
+  await page.evaluate(() => { Math.random = () => 0; });
+  for (let i = 0; i < 3; i++) {
+    await page.locator('#start-third').click(); await completeTen();
+    await page.locator('#home').click();
+  }
+  assert.ok(await page.evaluate(() => history.collection.owned.includes('three')));
+  assert.equal(await page.evaluate(() => history.collection.dailyDraws), 3);
+  await page.locator('#album').click();
+  await page.locator('[data-filter="rare"]').click();
+  assert.equal(await page.locator('[data-kind="place"]:visible').count(), 0);
+  await page.locator('[data-card="rare-0"]').click();
+  assert.match(await page.locator('h1').innerText(), /ほうき星/);
+  await page.locator('#back-album').click();
+  await page.screenshot({ path: '/tmp/kazu-v03-album.png', fullPage: true });
+  await page.locator('#home').click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: '/tmp/kazu-v03-home.png', fullPage: true });
+  await page.locator('#start-third').click();
+  for (const width of [320, 390, 430]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const type of ['missingAdd', 'missingSub', 'addBridge', 'subBridge']) {
+      const steps = await page.evaluate(type => Kazu.supportSteps(Kazu.generate(type)).length, type);
+      for (let step = -1; step < steps; step++) {
+        await page.evaluate(({type, step}) => { session.question = Kazu.generate(type); session.mode = step < 0 ? 'main' : 'support'; session.supportIndex = Math.max(0, step); renderQuestion(); }, {type, step});
+        if (step < 0) await page.locator('#show-hint').click();
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}: ${type} step ${step}`);
+      }
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: '/tmp/kazu-v03-support.png', fullPage: true });
+  // Every item has renderable art and a working detail page, without granting any user rewards.
+  await page.evaluate(() => { history.collection.owned = Collection.catalog.map(c => c.id); showAlbum(); });
+  assert.equal(await page.locator('[data-card] svg').count(), 36);
+  await page.screenshot({ path: '/tmp/kazu-v03-all.png', fullPage: true });
   // Corrupt stored data is not silently overwritten.
   await page.evaluate(() => localStorage.setItem(KEY, '{bad'));
   await page.reload();
@@ -171,7 +248,7 @@ const path = require('node:path');
   assert.equal(await denied.locator('#storage-warning').isVisible(), true);
   assert.equal(await denied.evaluate(() => history.total), 1);
   assert.deepEqual(errors, []);
-  console.log('PASS: LEVEL 1/2 sessions; distinct prerequisite answers; legacy migration; adaptive bridge questions; postcards and shooting stars; 320/390/430px layouts; corrupt/denied storage; no JS errors.');
+  console.log('PASS: LEVEL 1/2/3; multi-step help; v1/v2 migration; 36 collectible layouts; perfect streaks; rare draws; no reward reroll; reload/abandon; 320/390/430px; corrupt/denied storage; no JS errors.');
   await browser.close();
   server.close();
 })().catch(error => { console.error(error); process.exit(1); });

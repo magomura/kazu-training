@@ -1,6 +1,16 @@
 # かずトレ
 
-数の関係を、ゆっくり確かめる基礎算数トレーニング。iPhone Safari向けのLEVEL 1・2試作です。
+数の関係を、ゆっくり確かめる基礎算数トレーニング。iPhone Safari向けのLEVEL 1・2・3試作です。
+
+## v0.3（2026-11-11）
+
+LEVEL 3「10の橋をわたろう」、3段階の補助問題、36種類のコレクションを追加しました。旧6景色・履歴・流れ星を保持し、新しい景色18、珍しい発見6、記念品6を更新後から集められます。条件と移行仕様は [v0.3設計・運用](docs/v0.3.md) を参照してください。
+
+公開URL: https://magomura.github.io/kazu-training/
+
+開始ボタンはLEVEL 3を先頭に表示。LEVEL 1・2もいつでも選べます。localStorageのキーは以前のまま、データ内versionは3です。コレクションの進行・獲得内容・LEVEL別の連続全問正解回数も保存します。
+
+以下はv0.2の実装記録。v0.3での変更点は上記リンクを優先してください。
 
 ## 今回の範囲
 
@@ -82,7 +92,7 @@ localStorageのキー: `kazu-training:v1`（既存の保存場所を維持。デ
 ## 検証
 
 ```sh
-node --test tests/engine.test.cjs
+node --test tests/engine.test.cjs tests/collection.test.cjs
 ```
 
 ブラウザテストは開発用のPlaywrightを導入して実行します（テスト自身が一時的な静的配信を起動します）。

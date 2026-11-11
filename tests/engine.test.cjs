@@ -29,7 +29,41 @@ test('records main questions once, first-answer correctness and per-type misses'
   assert.ok(K.validState(JSON.parse(JSON.stringify(s))));
 });
 test('rejects malformed or future-version persisted data', () => {
-  for (const value of [null, {}, [], { ...K.createState(), version: 3 }, { ...K.createState(), correct: 99 }, { ...K.createState(), types: {} }, { ...K.createState(), days: { nope: -1 } }, { ...K.createState(), recent: [{ level: 2, correct: 11 }] }]) assert.ok(!K.validState(value));
+  for (const value of [null, {}, [], { ...K.createState(), version: 4 }, { ...K.createState(), correct: 99 }, { ...K.createState(), types: {} }, { ...K.createState(), days: { nope: -1 } }, { ...K.createState(), recent: [{ level: 2, correct: 11 }] }, { ...K.createState(), collection: {} }]) assert.ok(!K.validState(value));
+});
+test('LEVEL 3 blank equations and every bridge support step are mathematically valid', () => {
+  const rng = seeded(827);
+  for (const type of ['missingAdd', 'missingSub', 'addBridge', 'subBridge']) for (let i = 0; i < 3000; i++) {
+    const q = K.generate(type, rng);
+    assert.ok(q.answer >= 0 && q.answer <= 20);
+    if (type === 'missingAdd') assert.equal(q.a + q.answer, q.result);
+    if (type === 'missingSub') assert.equal(q.total - q.answer, q.result);
+    const steps = K.supportSteps(q);
+    assert.equal(steps.length, type.endsWith('Bridge') ? 3 : 1);
+    for (const p of steps) {
+      assert.equal(p.answer, p.subtract ? p.total - p.b : p.compose ? p.total : p.total - p.a);
+      assert.ok(p.total <= 20 && p.answer >= 0 && p.answer <= 20);
+    }
+    if (type.endsWith('Bridge')) assert.equal(steps.at(-1).answer, q.answer);
+  }
+});
+test('v2 migration retains old learning, recent sessions and shooting stars', () => {
+  const old = K.createState(); old.version = 2; delete old.collection;
+  K.THIRD_TYPES.forEach(t => delete old.types[t]);
+  old.total = 330; old.correct = 320; old.bright = 27; old.recent = [{ level: 2, correct: 10 }];
+  const next = K.migrate(old);
+  assert.equal(next.version, 3); assert.equal(next.total, 330); assert.equal(next.bright, 27);
+  assert.deepEqual(next.recent, old.recent); assert.equal(next.collection.completed, 0);
+  assert.equal(next.collection.streaks[2], 0); assert.ok(K.validState(next));
+});
+test('LEVEL 3 has harder relations and returns to a gentler mix at 5/10', () => {
+  const s = K.createState();
+  const plan = K.schedule(s, 3, seeded());
+  assert.equal(plan.length, 10); ['addBridge', 'subBridge', 'missingAdd', 'missingSub'].forEach(t => assert.ok(plan.includes(t)));
+  K.completeSession(s, 3, 5, 1, '2026-11-11', () => .9);
+  const gentle = K.schedule(s, 3, seeded());
+  assert.equal(gentle.length, 10); assert.ok(!gentle.some(t => t.startsWith('missing')));
+  assert.ok(gentle.includes('complement') && gentle.includes('parts'));
 });
 test('LEVEL 2 arithmetic and distinct prerequisite answers stay within bounds', () => {
   const rng = seeded(913);
