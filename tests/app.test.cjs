@@ -39,3 +39,17 @@ test('22 is a subtraction mistake, not an input error; support flow remains avai
   assert.equal(run('session.mistakes'), 1);
   node('#continue').onclick(); assert.equal(run('session.mode'), 'support');
 });
+
+test('F-1 keeps the same remaining positions in main and support ten frames', () => {
+  const { run } = harness();
+  const classes = html => [...html.matchAll(/class="dot ([^"]*)"/g)].map(m => m[1]);
+  for (let a = 11; a <= 18; a++) for (let b = a - 9; b <= 9; b++) {
+    run(`session.question = { ...session.question, a: ${a}, b: ${b}, total: ${a}, answer: ${a-b} };`);
+    const main = classes(run('visual(session.question)')).slice(0, 10);
+    const support = classes(run('visual(Kazu.supportSteps(session.question)[1])'));
+    assert.deepEqual(support, main);
+    const blank = classes(run(`visual(Kazu.supportSteps({ ...session.question, type: 'missingSub', result: ${a-b}, answer: ${b} })[2])`));
+    assert.deepEqual(blank.map(c => c === 'filled'), main.map(c => c === 'filled'));
+    assert.equal(blank.filter(c => c === '').length, b);
+  }
+});
