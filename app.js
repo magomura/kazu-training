@@ -82,7 +82,7 @@ function visual(q) {
   }
   const bridge = q.type === 'subBridge' || q.type === 'missingSub';
   const subtract = q.subtract || q.type === 'missingSub';
-  const dots = Array.from({ length: q.total }, (_, i) => `<span class="dot ${subtract && (bridge ? i < q.b : i >= q.total - q.b) ? 'removed' : subtract || i < q.a ? 'filled' : q.compose ? 'other' : ''}"></span>`);
+  const dots = Array.from({ length: q.total }, (_, i) => `<span class="dot ${subtract && (bridge || q.removeFromStart ? i < q.b : i >= q.total - q.b) ? 'removed' : subtract || (q.remainingAtEnd ? i >= q.total - q.a : i < q.a) ? 'filled' : q.compose ? 'other' : ''}"></span>`);
   const frames = Array.from({ length: Math.ceil(q.total / 10) }, (_, i) => `<div class="ten-frame">${dots.slice(i * 10, i * 10 + 10).join('')}</div>`).join('');
   return `<div class="visual" role="img" aria-label="${q.total}個の丸。${subtract ? `${q.b}個を線で消しています。` : `${q.a}個は緑色、残りは${q.compose ? 'オレンジ色' : '白'}です。`}">${frames}<p class="visual-caption">${subtract ? (bridge ? '10の枠ののこりと、となりの丸をあわせよう' : '線で消した丸を、とりのぞこう') : q.compose ? 'ふたつの色を、あわせてみよう' : '緑の丸と、白い丸'}${q.total >= 10 ? '<br>ひとつの枠に10個まで入るよ' : ''}</p></div>`;
 }

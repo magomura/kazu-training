@@ -52,14 +52,14 @@
     if (q.type === 'subBridge') {
       const ones = q.a - 10, left = 10 - q.b;
       return [q.prerequisite,
-        { ...part(10, q.b), subtract: true, b: q.b, a: 10, prompt: '10から ひこう', expression: `10 − ${q.b} ＝ □`, hint: '10の枠から、線で消した丸をのぞこう。', explanation: `10から${q.b}をひくと${left}だね。` },
+        { ...part(10, q.b), removeFromStart: true, subtract: true, b: q.b, a: 10, prompt: '10から ひこう', expression: `10 − ${q.b} ＝ □`, hint: '10の枠から、線で消した丸をのぞこう。', explanation: `10から${q.b}をひくと${left}だね。` },
         { ...part(q.answer, left), compose: true, b: ones, answer: q.answer, prompt: 'のこった数と あわせよう', expression: `${left} ＋ ${ones} ＝ □`, hint: '10からのこった丸と、分けておいた丸をあわせよう。', explanation: `${left}と${ones}で${q.answer}だね。` }];
     }
     if (q.type === 'missingSub') {
       const ones = q.total - 10, left = q.result - ones;
       return [part(q.total, 10),
         { ...part(q.result, ones), prompt: `${q.result}は ${ones}と いくつ？`, hint: '分けておいた数と、10からのこった数をあわせるよ。' },
-        { ...part(10, left), prompt: `10から いくつひくと${left}？`, expression: `10 − □ ＝ ${left}`, hint: '緑の丸をのこすには、白い丸をいくつとればいいかな？', explanation: `10から${q.answer}をひくと${left}。${left}と${ones}で${q.result}だね。` }];
+        { ...part(10, left), remainingAtEnd: true, prompt: `10から いくつひくと${left}？`, expression: `10 − □ ＝ ${left}`, hint: '緑の丸をのこすには、白い丸をいくつとればいいかな？', explanation: `10から${q.answer}をひくと${left}。${left}と${ones}で${q.result}だね。` }];
     }
     return [support(q)];
   }
