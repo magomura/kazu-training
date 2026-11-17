@@ -37,7 +37,7 @@ const path = require('node:path');
   assert.equal(await page.locator('#input-error').isVisible(), true);
   assert.equal(await page.evaluate(() => history.total), 0);
   await page.locator('#answer').fill('0'); await page.locator('#answer-form button').click();
-  assert.match(await page.locator('#feedback').innerText(), /もう一度/);
+  assert.match(await page.locator('#feedback').innerText(), /もう一度|おしい|白い丸/);
   await page.locator('#continue').click();
   assert.equal(await page.evaluate(() => session.mode), 'support');
   await page.screenshot({ path: '/tmp/kazu-support.png', fullPage: true });
@@ -231,6 +231,35 @@ const path = require('node:path');
   await page.evaluate(() => { history.collection.owned = Collection.catalog.map(c => c.id); showAlbum(); });
   assert.equal(await page.locator('[data-card] svg').count(), 36);
   await page.screenshot({ path: '/tmp/kazu-v03-all.png', fullPage: true });
+  // Three progressive hints, subtraction diagram and error-specific guidance.
+  await page.evaluate(() => {
+    start(3);
+    const values = [.4, .4, .7];
+    session.question = Kazu.generate('subBridge', () => values.shift());
+    renderQuestion();
+  });
+  assert.equal(await page.evaluate(() => session.question.expression), '14 − 8 ＝ □');
+  await page.locator('#show-hint').click();
+  assert.equal(await page.locator('#hint .visual').count(), 0);
+  await page.locator('#show-hint').click();
+  assert.equal(await page.locator('.ten-frame').first().locator('.removed').count(), 8);
+  assert.equal(await page.locator('.ten-frame').nth(1).locator('.removed').count(), 0);
+  await page.locator('#show-hint').click();
+  assert.match(await page.locator('#hint').innerText(), /10 − 8 ＝ 2/);
+  assert.equal(await page.locator('#show-hint').isVisible(), false);
+  await page.locator('#answer').fill('22'); await page.locator('#answer-form button').click();
+  assert.match(await page.locator('#feedback').innerText(), /ひき算/);
+  await page.locator('#continue').click();
+  for (const answer of [4, 2, 6]) {
+    assert.equal(await page.evaluate(() => activeQuestion().answer), answer);
+    await page.locator('#answer').fill(String(answer));
+    await page.locator('#answer-form button').click(); await page.locator('#continue').click();
+  }
+  assert.equal(await page.evaluate(() => session.mode), 'return');
+  assert.equal(await page.locator('#hint .visual').count(), 0);
+  await page.locator('#answer').fill('6'); await page.locator('#answer-form button').click();
+  await page.locator('#continue').click();
+  assert.equal(await page.locator('#hint').innerText(), '');
   // Corrupt stored data is not silently overwritten.
   await page.evaluate(() => localStorage.setItem(KEY, '{bad'));
   await page.reload();

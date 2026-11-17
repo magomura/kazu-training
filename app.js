@@ -80,9 +80,11 @@ function visual(q) {
     const active = q.type === 'compare' ? [q.a, q.b] : [];
     return `<div class="visual" role="img" aria-label="1から10の数の線。右へ1ずつ大きくなります。"><div class="number-line">${Array.from({ length: 10 }, (_, i) => `<span class="${active.includes(i + 1) ? 'active' : ''}">${i + 1}</span>`).join('')}</div><p class="visual-caption">小さい ←　数の線　→ 大きい</p></div>`;
   }
-  const dots = Array.from({ length: q.total }, (_, i) => `<span class="dot ${q.subtract && i >= q.total - q.b ? 'removed' : i < q.a ? 'filled' : q.compose ? 'other' : ''}"></span>`);
+  const bridge = q.type === 'subBridge' || q.type === 'missingSub';
+  const subtract = q.subtract || q.type === 'missingSub';
+  const dots = Array.from({ length: q.total }, (_, i) => `<span class="dot ${subtract && (bridge ? i < q.b : i >= q.total - q.b) ? 'removed' : subtract || i < q.a ? 'filled' : q.compose ? 'other' : ''}"></span>`);
   const frames = Array.from({ length: Math.ceil(q.total / 10) }, (_, i) => `<div class="ten-frame">${dots.slice(i * 10, i * 10 + 10).join('')}</div>`).join('');
-  return `<div class="visual" role="img" aria-label="${q.total}個の丸。${q.subtract ? `${q.b}個を線で消しています。` : `${q.a}個は緑色、残りは${q.compose ? 'オレンジ色' : '白'}です。`}">${frames}<p class="visual-caption">${q.subtract ? '線で消した丸を、とりのぞこう' : q.compose ? 'ふたつの色を、あわせてみよう' : '緑の丸と、白い丸'}${q.total >= 10 ? '<br>ひとつの枠に10個まで入るよ' : ''}</p></div>`;
+  return `<div class="visual" role="img" aria-label="${q.total}個の丸。${subtract ? `${q.b}個を線で消しています。` : `${q.a}個は緑色、残りは${q.compose ? 'オレンジ色' : '白'}です。`}">${frames}<p class="visual-caption">${subtract ? (bridge ? '10の枠ののこりと、となりの丸をあわせよう' : '線で消した丸を、とりのぞこう') : q.compose ? 'ふたつの色を、あわせてみよう' : '緑の丸と、白い丸'}${q.total >= 10 ? '<br>ひとつの枠に10個まで入るよ' : ''}</p></div>`;
 }
 function renderQuestion() {
   const q = activeQuestion();
@@ -91,9 +93,14 @@ function renderQuestion() {
   app.querySelector('.session-top p').textContent = session.mode === 'support' ? '数をたしかめよう' : `LEVEL ${session.level} · ${session.done + 1} / 10問`;
   app.querySelector('.question-card .eyebrow').textContent = session.mode === 'support' ? `ちいさなステップ ${session.supportIndex + 1} / ${Kazu.supportSteps(session.question).length}` : Kazu.LABELS[q.type];
   document.querySelector('#stop').onclick = () => finish(true);
+  let hintStage = 0;
+  const [cue, intermediate] = Kazu.hints(q);
+  document.querySelector('#hint').setAttribute('aria-live', 'polite');
   document.querySelector('#show-hint').onclick = () => {
-    document.querySelector('#hint').innerHTML = visual(q) + `<p class="note">${q.hint}</p>`;
-    document.querySelector('#show-hint').hidden = true;
+    hintStage++;
+    document.querySelector('#hint').innerHTML = `<p class="note">${cue}</p>` + (hintStage >= 2 ? visual(q) : '') + (hintStage >= 3 ? `<p class="note">${intermediate}</p>` : '');
+    document.querySelector('#show-hint').textContent = hintStage === 1 ? '図を見る' : '途中の式を見る';
+    document.querySelector('#show-hint').hidden = hintStage >= 3;
   };
   // Heading focus gives screen readers context without opening the iPhone keyboard.
   app.querySelector('h1').focus({ preventScroll: true });
@@ -122,9 +129,8 @@ function submit(event) {
   if (document.querySelector('#answer-form').hidden) return;
   const input = document.querySelector('#answer');
   const raw = input.value.trim().replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
-  const maxAnswer = session.level >= 2 ? 20 : 10;
-  if (!/^\d{1,2}$/.test(raw) || Number(raw) > maxAnswer) {
-    const error = document.querySelector('#input-error'); error.textContent = `0〜${maxAnswer}の数字を入れてね。`; error.hidden = false; input.setAttribute('aria-invalid', 'true'); return;
+  if (!/^\d{1,2}$/.test(raw) || Number(raw) > 99) {
+    const error = document.querySelector('#input-error'); error.textContent = '0〜99の数字を入れてね。'; error.hidden = false; input.setAttribute('aria-invalid', 'true'); return;
   }
   input.removeAttribute('aria-invalid'); document.querySelector('#input-error').hidden = true;
   const q = session.question, active = activeQuestion(), correct = Number(raw) === active.answer;
@@ -150,7 +156,7 @@ function submit(event) {
     session.mistakes++;
     history.collection.streaks[session.level] = 0; save();
     if (session.mode === 'main') {
-      feedback('もう一度、考えてみよう', '小さなステップで、数をたしかめよう。', '数をたしかめる', () => { session.mode = 'support'; renderQuestion(); }, true);
+      feedback(Kazu.mistakeHint(q, Number(raw)), '小さなステップで、数をたしかめよう。', '数をたしかめる', () => { session.mode = 'support'; renderQuestion(); }, true);
     } else {
       resolve();
       feedback(`答えは ${q.answer}。図でたしかめよう`, q.explanation, session.done === 10 ? '今日のふりかえり' : '次の問題', nextQuestion, true);

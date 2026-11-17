@@ -17,8 +17,8 @@
         prompt: type === 'missingAdd' ? 'いくつ足すと この数になる？' : 'いくつひくと この数になる？',
         expression: `${base.a} ${type === 'missingAdd' ? '＋' : '−'} □ ＝ ${base.answer}`,
         a: type === 'missingAdd' ? base.a : base.answer,
-        hint: '緑の丸と白い丸で全体になるよ。白い丸の数を考えよう。',
-        explanation: type === 'missingAdd' ? `${base.a}に${10 - base.a}を足すと10。あと${base.answer - 10}で${base.answer}。足した数は${base.b}。` : `${base.a}から${base.a - 10}をひくと10。あと${10 - base.answer}をひくと${base.answer}。ひいた数は${base.b}。`,
+        hint: type === 'missingSub' ? '10のまとまりからひいて、のこりとあわせよう。' : '緑の丸と白い丸で全体になるよ。白い丸の数を考えよう。',
+        explanation: type === 'missingAdd' ? `${base.a}に${10 - base.a}を足すと10。あと${base.answer - 10}で${base.answer}。足した数は${base.b}。` : `${base.a}を10と${base.a - 10}に分けるよ。10から${base.b}をひくと${10 - base.b}。${10 - base.b}と${base.a - 10}で${base.answer}。ひいた数は${base.b}。`,
         prerequisite: part(10, type === 'missingAdd' ? base.a : base.answer) };
     }
     if (NEXT_TYPES.includes(type)) return generateNext(type, rng);
@@ -50,8 +50,16 @@
       return [q.prerequisite, part(q.b, need), { ...part(10 + rest, 10), compose: true, answer: 10 + rest, prompt: '10と のこりを あわせると？', expression: `10 ＋ ${rest} ＝ □`, hint: '10のまとまりと、のこりの丸をあわせよう。', explanation: `10と${rest}で${10 + rest}だね。` }];
     }
     if (q.type === 'subBridge') {
-      const first = q.a - 10, rest = q.b - first;
-      return [q.prerequisite, part(q.b, first), { ...part(10, rest), subtract: true, b: rest, a: 10, prompt: '10から のこりを ひこう', expression: `10 − ${rest} ＝ □`, hint: '線で消した丸をのぞいて数えよう。', explanation: `10から${rest}をひくと${q.answer}だね。` }];
+      const ones = q.a - 10, left = 10 - q.b;
+      return [q.prerequisite,
+        { ...part(10, q.b), subtract: true, b: q.b, a: 10, prompt: '10から ひこう', expression: `10 − ${q.b} ＝ □`, hint: '10の枠から、線で消した丸をのぞこう。', explanation: `10から${q.b}をひくと${left}だね。` },
+        { ...part(q.answer, left), compose: true, b: ones, answer: q.answer, prompt: 'のこった数と あわせよう', expression: `${left} ＋ ${ones} ＝ □`, hint: '10からのこった丸と、分けておいた丸をあわせよう。', explanation: `${left}と${ones}で${q.answer}だね。` }];
+    }
+    if (q.type === 'missingSub') {
+      const ones = q.total - 10, left = q.result - ones;
+      return [part(q.total, 10),
+        { ...part(q.result, ones), prompt: `${q.result}は ${ones}と いくつ？`, hint: '分けておいた数と、10からのこった数をあわせるよ。' },
+        { ...part(10, left), prompt: `10から いくつひくと${left}？`, expression: `10 − □ ＝ ${left}`, hint: '緑の丸をのこすには、白い丸をいくつとればいいかな？', explanation: `10から${q.answer}をひくと${left}。${left}と${ones}で${q.result}だね。` }];
     }
     return [support(q)];
   }
@@ -63,7 +71,7 @@
     return { ...q, support: true, prompt: q.compose ? '丸は ぜんぶで いくつ？' : '色のついていない丸は いくつ？', expression: '', hint: 'ひとつずつ、ゆっくり数えてみよう。' };
   }
   function chooseType(stats, rng = Math.random, available = TYPES) {
-    const review = available.filter(t => (stats[t]?.misses || 0) > 0);
+    const review = available.filter(t => (stats[t]?.misses || 0) > 0 && (stats[t]?.firstCorrectStreak || 0) < 3);
     const pool = review.length && rng() < .3 ? review : available;
     return pool[integer(0, pool.length - 1, rng)];
   }
@@ -71,7 +79,7 @@
   const count = n => Number.isSafeInteger(n) && n >= 0;
   function validState(s) {
     const schemaTypes = s?.version === 1 ? TYPES : s?.version === 2 ? OLD_TYPES : ALL_TYPES;
-    const base = [1, 2, 3].includes(s?.version) && count(s.total) && count(s.correct) && s.correct <= s.total && (s.lastStudyDate === null || /^\d{4}-\d{2}-\d{2}$/.test(s.lastStudyDate)) && s.days && typeof s.days === 'object' && !Array.isArray(s.days) && Object.entries(s.days).every(([d, n]) => /^\d{4}-\d{2}-\d{2}$/.test(d) && count(n)) && schemaTypes.every(t => s.types?.[t] && ['total', 'correct', 'misses'].every(k => count(s.types[t][k])) && s.types[t].correct <= s.types[t].total);
+    const base = [1, 2, 3].includes(s?.version) && count(s.total) && count(s.correct) && s.correct <= s.total && (s.lastStudyDate === null || /^\d{4}-\d{2}-\d{2}$/.test(s.lastStudyDate)) && s.days && typeof s.days === 'object' && !Array.isArray(s.days) && Object.entries(s.days).every(([d, n]) => /^\d{4}-\d{2}-\d{2}$/.test(d) && count(n)) && schemaTypes.every(t => s.types?.[t] && ['total', 'correct', 'misses'].every(k => count(s.types[t][k])) && s.types[t].correct <= s.types[t].total && (s.types[t].firstCorrectStreak === undefined || (count(s.types[t].firstCorrectStreak) && s.types[t].firstCorrectStreak <= 3)));
     return Boolean(base && (s.version === 1 || (count(s.bright) && Array.isArray(s.recent) && s.recent.length <= 5 && s.recent.every(r => (s.version === 2 ? [1, 2] : [1, 2, 3]).includes(r.level) && count(r.correct) && r.correct <= 10))) && (s.version !== 3 || Collection.valid(s.collection)));
   }
   function migrate(s) {
@@ -133,17 +141,42 @@
     } else {
       a = 10 + integer(1, 8, rng); b = integer(a - 9, 9, rng); answer = a - b;
       prerequisite = partQuestion(a, 10);
-      explanation = `${b}を${a - 10}と${b - (a - 10)}に分けるよ。${a}から${a - 10}をひいて10。あと${b - (a - 10)}をひくと${answer}。`;
+      explanation = `${a}を10と${a - 10}に分けるよ。10から${b}をひくと${10 - b}。${10 - b}と${a - 10}で${answer}。`;
     }
     const subtract = type.startsWith('sub');
-    return { type, a, b, answer, total: subtract ? a : answer, compose: !subtract, subtract, prompt: subtract ? 'のこりは いくつ？' : 'あわせると いくつ？', expression: `${a} ${subtract ? '−' : '＋'} ${b} ＝ □`, explanation, hint: subtract ? '線で消した丸をのぞいて、のこりを数えよう。10のまとまりにも注目。' : '10のまとまりを見つけて、のこりとあわせよう。', visual: 'frame', prerequisite };
+    return { type, a, b, answer, total: subtract ? a : answer, compose: !subtract, subtract, prompt: subtract ? 'のこりは いくつ？' : 'あわせると いくつ？', expression: `${a} ${subtract ? '−' : '＋'} ${b} ＝ □`, explanation, hint: subtract ? (type === 'subBridge' ? '10のまとまりからひいて、分けておいた数とあわせよう。' : '線で消した丸をのぞいて、のこりを数えよう。10のまとまりにも注目。') : '10のまとまりを見つけて、のこりとあわせよう。', visual: 'frame', prerequisite };
+  }
+  // Hints reveal a cue, then the existing diagram, then an intermediate relation.
+  function hints(q) {
+    switch (q.type) {
+      case 'addBridge': return ['10をつくれないかな？', `${q.a} ＋ ${10 - q.a} ＝ 10。${q.b}の のこりは${q.answer - 10}。`];
+      case 'subBridge': return ['10のまとまりからひいてみよう。', `${q.a} ＝ 10 ＋ ${q.a - 10}。10 − ${q.b} ＝ ${10 - q.b}。あとは${q.a - 10}とあわせよう。`];
+      case 'missingSub': return ['10のまとまりからひいて、分けておいた数とあわせよう。', `${q.total} ＝ 10 ＋ ${q.total - 10}。${q.result} ＝ ${q.result - (q.total - 10)} ＋ ${q.total - 10}。10 − □ ＝ ${q.result - (q.total - 10)}。`];
+      case 'missingAdd': return ['まず10をつくって、その先を考えよう。', `${q.a} ＋ ${10 - q.a} ＝ 10。10から${q.result}までは${q.result - 10}。`];
+      case 'complement': case 'split10': return ['10にするには、あといくつかな？', `${q.a} ＋ □ ＝ 10。ふたつをあわせて10にしよう。`];
+      case 'tens': return ['10のまとまりと、そのほかに分けよう。', `${q.total} ＝ 10 ＋ □。10の枠のほかを見よう。`];
+      case 'add20': return ['10のほかの数を、先にあわせよう。', `${q.a} ＝ 10 ＋ ${q.a - 10}。まず${q.a - 10} ＋ ${q.b}を考えよう。`];
+      case 'sub20': return ['10のほかの数から、ひいてみよう。', `${q.a} ＝ 10 ＋ ${q.a - 10}。まず${q.a - 10} − ${q.b}を考えよう。`];
+      case 'compare': return ['数の順番を思いうかべよう。', '1 → 2 → 3 …。右へ進むと、1ずつ大きくなるよ。'];
+      case 'order': return ['となりの数と、くらべてみよう。', 'となりへ進むと1ずつふえるよ。□の前や後から、たどってみよう。'];
+      default: return [q.compose ? 'ふたつの数をあわせよう。' : '全体をふたつに分けよう。', `${q.total} ＝ ${q.a} ＋ ${q.compose ? q.b : '□'}。ふたつの数で全体になるよ。`];
+    }
+  }
+  function mistakeHint(q, answer) {
+    if (q.subtract && answer === q.a + q.b) return 'ひき算だね。のこりは もとの数より 小さくなるよ。';
+    if (q.type === 'missingAdd' && answer === q.a + q.result) return `□は 足した数。${q.a}から${q.result}まで、いくつ ふえたかな？`;
+    if (q.type === 'missingSub' && answer === q.total + q.result) return '□は ひいた数。10のまとまりからひいて考えよう。';
+    if (Math.abs(answer - q.answer) === 1) return 'おしい！ 1つずつ、数えなおしてみよう。';
+    if (q.type === 'complement' || q.type === 'split10') return '10の枠の、白い丸を数えてみよう。';
+    return 'もう一度、考えてみよう。';
   }
   function record(state, q, mistakes, date) {
     state.total++; state.correct += mistakes === 0 ? 1 : 0;
     const type = state.types[q.type]; type.total++; type.correct += mistakes === 0 ? 1 : 0; type.misses += mistakes;
+    type.firstCorrectStreak = mistakes === 0 ? Math.min(3, (type.firstCorrectStreak || 0) + 1) : 0;
     state.days[date] = (state.days[date] || 0) + 1; state.lastStudyDate = date;
   }
-  const api = { TYPES, NEXT_TYPES, THIRD_TYPES, ALL_TYPES, LABELS, generate, support, supportSteps, chooseType, createState, validState, migrate, record, schedule, bridgeReady, completeSession };
+  const api = { hints, mistakeHint, TYPES, NEXT_TYPES, THIRD_TYPES, ALL_TYPES, LABELS, generate, support, supportSteps, chooseType, createState, validState, migrate, record, schedule, bridgeReady, completeSession };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Kazu = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

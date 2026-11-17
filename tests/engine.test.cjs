@@ -39,7 +39,7 @@ test('LEVEL 3 blank equations and every bridge support step are mathematically v
     if (type === 'missingAdd') assert.equal(q.a + q.answer, q.result);
     if (type === 'missingSub') assert.equal(q.total - q.answer, q.result);
     const steps = K.supportSteps(q);
-    assert.equal(steps.length, type.endsWith('Bridge') ? 3 : 1);
+    assert.equal(steps.length, type.endsWith('Bridge') || type === 'missingSub' ? 3 : 1);
     for (const p of steps) {
       assert.equal(p.answer, p.subtract ? p.total - p.b : p.compose ? p.total : p.total - p.a);
       assert.ok(p.total <= 20 && p.answer >= 0 && p.answer <= 20);
@@ -102,4 +102,32 @@ test('8/10 opens only two bridge questions; lower accuracy restores basics', () 
   K.completeSession(s, 2, 5); check(0);
   for (let i = 0; i < 8; i++) K.completeSession(s, 1, 10);
   assert.equal(s.recent.length, 5); assert.ok(K.validState(s));
+});
+test('subtraction uses ten minus subtrahend, then adds the ones', () => {
+  for (let a = 11; a <= 18; a++) for (let b = a - 9; b <= 9; b++) {
+    const q = { ...K.generate('subBridge'), a, b, total: a, answer: a - b, prerequisite: { total: a, a: 10, answer: a - 10 } };
+    const steps = K.supportSteps(q);
+    assert.deepEqual(steps.map(p => p.answer), [a - 10, 10 - b, a - b]);
+    assert.equal(steps[1].expression, `10 − ${b} ＝ □`);
+    assert.equal(steps[2].expression, `${10 - b} ＋ ${a - 10} ＝ □`);
+  }
+});
+test('review recovers after three first answers, persists, and reopens on a miss', () => {
+  let s = K.createState(); const q = K.generate('subBridge');
+  K.record(s, q, 1, '2026-11-17');
+  const select = () => K.chooseType(s.types, () => 0, ['compare', 'subBridge']);
+  for (let i = 0; i < 3; i++) { assert.equal(select(), 'subBridge'); K.record(s, q, 0, '2026-11-17'); }
+  s = K.migrate(JSON.parse(JSON.stringify(s)));
+  assert.equal(select(), 'compare'); assert.equal(s.types.subBridge.misses, 1);
+  K.record(s, q, 1, '2026-11-17'); assert.equal(select(), 'subBridge');
+  delete s.types.subBridge.firstCorrectStreak;
+  assert.ok(K.validState(s)); assert.equal(select(), 'subBridge');
+  s.types.subBridge.firstCorrectStreak = -1; assert.ok(!K.validState(s));
+});
+test('mistake cues distinguish operations, blanks, offsets and complements', () => {
+  assert.match(K.mistakeHint({ subtract: true, a: 14, b: 8, answer: 6 }, 22), /ひき算/);
+  assert.match(K.mistakeHint({ type: 'missingAdd', a: 8, result: 13, answer: 5 }, 21), /8から13/);
+  assert.match(K.mistakeHint({ type: 'addBridge', answer: 13 }, 12), /1つずつ/);
+  assert.match(K.mistakeHint({ type: 'complement', answer: 5 }, 0), /白い丸/);
+  for (const type of K.ALL_TYPES) assert.equal(K.hints(K.generate(type)).length, 2);
 });
