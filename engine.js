@@ -54,7 +54,12 @@
   function supportSteps(q) {
     if (q.type === 'addBridge') {
       const need = 10 - q.a, rest = q.b - need;
-      return [q.prerequisite, part(q.b, need), { ...part(10 + rest, 10), compose: true, answer: 10 + rest, prompt: '10と のこりを あわせると？', expression: `10 ＋ ${rest} ＝ □`, hint: '10のまとまりと、のこりの丸をあわせよう。', explanation: `10と${rest}で${10 + rest}だね。` }];
+      const remainder = {
+        ...part(q.b, need), visual: 'moveRemainder', prompt: 'のこりは いくつ？',
+        expression: '', hint: '10の枠の外にある、オレンジの丸を見よう。',
+        explanation: `${need}こ うつしたから、外には${rest}こ のこったね。`
+      };
+      return [q.prerequisite, remainder, { ...part(10 + rest, 10), compose: true, answer: 10 + rest, prompt: '10と のこりを あわせると？', expression: `10 ＋ ${rest} ＝ □`, hint: '10のまとまりと、のこりの丸をあわせよう。', explanation: `10と${rest}で${10 + rest}だね。` }];
     }
     if (q.type === 'subBridge') {
       const ones = q.a - 10, left = 10 - q.b;
