@@ -86,9 +86,29 @@ function visual(q) {
   const frames = Array.from({ length: Math.ceil(q.total / 10) }, (_, i) => `<div class="ten-frame">${dots.slice(i * 10, i * 10 + 10).join('')}</div>`).join('');
   return `<div class="visual" role="img" aria-label="${q.total}個の丸。${subtract ? `${q.b}個を線で消しています。` : `${q.a}個は緑色、残りは${q.compose ? 'オレンジ色' : '白'}です。`}">${frames}<p class="visual-caption">${subtract ? (bridge ? '10の枠ののこりと、となりの丸をあわせよう' : '線で消した丸を、とりのぞこう') : q.compose ? 'ふたつの色を、あわせてみよう' : '緑の丸と、白い丸'}${q.total >= 10 ? '<br>ひとつの枠に10個まで入るよ' : ''}</p></div>`;
 }
+// An unscored, tap-only introduction before the numerical support steps.
+function renderMove() {
+  const q = session.question;
+  const moved = session.moved || 0, need = 10 - q.a, full = moved === need;
+  app.innerHTML = `<div class="session-top"><p>数をうつしてみよう</p><button id="stop" class="text-button">ここでおわる</button></div><section class="card question-card"><h1 tabindex="-1">${full ? '10に なった！' : 'オレンジを 1こずつ、白いところへ うつそう'}</h1><div class="visual"><div class="ten-frame">${Array.from({length:10}, (_,i) => `<span class="dot ${i < q.a ? 'filled' : i < q.a + moved ? 'other' : ''}"></span>`).join('')}</div><div class="move-source">${Array.from({length:q.b - moved}, (_,i) => `<button class="move-dot" aria-label="オレンジの丸を1こ うつす" ${full ? 'disabled' : ''}><span class="dot other" aria-hidden="true"></span></button>`).join('')}</div></div><p id="move-status" class="note" role="status">${full ? `${moved}こ うつしたら、10になったね。のこりを たしかめよう。` : 'オレンジの丸をタップしてね。'}</p>${full ? '<button id="move-next" class="primary">のこりは いくつ？</button>' : ''}</section>`;
+  document.querySelector('#stop').onclick = () => finish(true);
+  app.querySelectorAll('.move-dot').forEach(button => { button.onclick = () => {
+    // Ignore stale/rapid taps after the frame has filled.
+    if (session.mode !== 'move' || session.moved >= need) return;
+    session.moved++; renderMove();
+  }; });
+  if (full) document.querySelector('#move-next').onclick = () => {
+    session.mode = 'support'; session.supportIndex = 1; session.supportAttempts = 0; renderQuestion();
+  };
+}
+function beginSupport() {
+  if (session.question.type === 'addBridge') {
+    session.mode = 'move'; session.moved = 0; renderMove();
+  } else { session.mode = 'support'; renderQuestion(); }
+}
 function renderQuestion() {
   const q = activeQuestion();
-  app.innerHTML = `<div class="session-top"><p>${session.mode === 'support' ? '数をたしかめよう' : `LEVEL 1 · ${session.done + 1} / 10問`}</p><button id="stop" class="text-button">ここでおわる</button></div><progress value="${session.done}" max="10" aria-label="今回の進みぐあい"></progress><section class="card question-card"><p class="eyebrow">${session.mode === 'support' ? 'ちいさなステップ' : '数となかよくなる'}</p><h1 tabindex="-1">${q.prompt}</h1>${q.expression ? `<p class="expression">${q.expression}</p>` : ''}<div id="hint">${session.mode === 'support' ? `${visual(q)}<p class="note">${q.hint}</p>` : ''}</div><form id="answer-form" novalidate><label class="input-label" for="answer">答えを数字で入れよう</label><input id="answer" name="answer" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" enterkeyhint="done" aria-describedby="input-error"><p id="input-error" class="input-error" role="alert" hidden></p><button class="primary" type="submit">答える</button></form><button id="show-hint" class="text-button" ${session.mode === 'support' ? 'hidden' : ''}>ヒントを見る</button><div id="feedback" aria-live="polite" aria-atomic="true"></div></section>`;
+  app.innerHTML = `<div class="session-top"><p>${session.mode === 'support' ? '数をたしかめよう' : `LEVEL 1 · ${session.done + 1} / 10問`}</p><button id="stop" class="text-button">ここでおわる</button></div><progress value="${session.done}" max="10" aria-label="今回の進みぐあい"></progress><section class="card question-card"><p class="eyebrow">${session.mode === 'support' ? 'ちいさなステップ' : '数となかよくなる'}</p><h1 tabindex="-1">${q.prompt}</h1>${q.expression ? `<p class="expression">${q.expression}</p>` : ''}<div id="hint">${session.mode === 'support' || q.alwaysVisual ? `${visual(q)}<p class="note">${q.hint}</p>` : ''}</div><form id="answer-form" novalidate><label class="input-label" for="answer">答えを数字で入れよう</label><input id="answer" name="answer" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" enterkeyhint="done" aria-describedby="input-error"><p id="input-error" class="input-error" role="alert" hidden></p><button class="primary" type="submit">答える</button></form><button id="show-hint" class="text-button" ${session.mode === 'support' ? 'hidden' : ''}>ヒントを見る</button><div id="feedback" aria-live="polite" aria-atomic="true"></div></section>`;
   document.querySelector('#answer-form').onsubmit = submit;
   app.querySelector('.session-top p').textContent = session.mode === 'support' ? '数をたしかめよう' : `LEVEL ${session.level} · ${session.done + 1} / 10問`;
   app.querySelector('.question-card .eyebrow').textContent = session.mode === 'support' ? `ちいさなステップ ${session.supportIndex + 1} / ${Kazu.supportSteps(session.question).length}` : Kazu.LABELS[q.type];
@@ -98,7 +118,7 @@ function renderQuestion() {
   document.querySelector('#hint').setAttribute('aria-live', 'polite');
   document.querySelector('#show-hint').onclick = () => {
     hintStage++;
-    document.querySelector('#hint').innerHTML = `<p class="note">${cue}</p>` + (hintStage >= 2 ? visual(q) : '') + (hintStage >= 3 ? `<p class="note">${intermediate}</p>` : '');
+    document.querySelector('#hint').innerHTML = `<p class="note">${cue}</p>` + (hintStage >= 2 || q.alwaysVisual ? visual(q) : '') + (hintStage >= 3 ? `<p class="note">${intermediate}</p>` : '');
     document.querySelector('#show-hint').textContent = hintStage === 1 ? '図を見る' : '途中の式を見る';
     document.querySelector('#show-hint').hidden = hintStage >= 3;
   };
@@ -156,7 +176,7 @@ function submit(event) {
     session.mistakes++;
     history.collection.streaks[session.level] = 0; save();
     if (session.mode === 'main') {
-      feedback(Kazu.mistakeHint(q, Number(raw)), '小さなステップで、数をたしかめよう。', '数をたしかめる', () => { session.mode = 'support'; renderQuestion(); }, true);
+      feedback(Kazu.mistakeHint(q, Number(raw)), '小さなステップで、数をたしかめよう。', '数をたしかめる', beginSupport, true);
     } else {
       resolve();
       feedback(`答えは ${q.answer}。図でたしかめよう`, q.explanation, session.done === 10 ? '今日のふりかえり' : '次の問題', nextQuestion, true);

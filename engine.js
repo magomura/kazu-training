@@ -6,11 +6,18 @@
   const NEXT_TYPES = ['tens', 'add20', 'sub20', 'addBridge', 'subBridge'];
   const THIRD_TYPES = ['missingAdd', 'missingSub'];
   const OLD_TYPES = [...TYPES, ...NEXT_TYPES];
-  const ALL_TYPES = [...OLD_TYPES, ...THIRD_TYPES];
+  const BASE_TYPES = [...OLD_TYPES, ...THIRD_TYPES];
+  const LEVEL1_TYPES = [...TYPES, 'frameSee'];
+  const ALL_TYPES = [...BASE_TYPES, 'frameSee'];
   const LABELS = { compare: '数の大小', order: '数の順番', complement: 'あといくつで10', split10: '10の分け方', parts: '数の分解と合成', tens: '10といくつ', add20: '20までの足し算', sub20: '20までの引き算', addBridge: '10をこえる足し算', subBridge: '10をまたぐ引き算' };
   const integer = (min, max, rng = Math.random) => min + Math.floor(rng() * (max - min + 1));
+  LABELS.frameSee = '10の枠を見てみよう';
   LABELS.missingAdd = '足す数を見つけよう'; LABELS.missingSub = 'ひく数を見つけよう';
   function generate(type, rng = Math.random) {
+    if (type === 'frameSee') {
+      const a = integer(5, 9, rng), green = rng() < .5;
+      return { type, a, total: 10, green, answer: green ? a : 10 - a, prompt: green ? '緑は いくつ？' : '白は いくつ？', expression: '', visual: 'frame', alwaysVisual: true, hint: green ? '上の段は5こ。下の緑とあわせよう。' : '白い丸を、ゆっくりたしかめよう。', explanation: green ? `緑は、5と${a-5}で${a}こ。` : `緑${a}こと白${10-a}こで10になるね。` };
+    }
     if (THIRD_TYPES.includes(type)) {
       const base = generateNext(type === 'missingAdd' ? 'addBridge' : 'subBridge', rng);
       return { ...base, type, answer: base.b, result: base.answer, compose: false, subtract: false,
@@ -64,13 +71,14 @@
     return [support(q)];
   }
   function support(q) {
+    if (q.type === 'frameSee') return { ...q, support: true, prompt: q.green ? '緑の丸を たしかめよう' : '白い丸を たしかめよう' };
     if (THIRD_TYPES.includes(q.type)) return q.prerequisite;
     if (NEXT_TYPES.includes(q.type)) return q.prerequisite;
     if (q.type === 'compare') return { ...q, support: true, prompt: `${q.bigger ? '右' : '左'}にある数は どっち？`, hint: '数の線の位置を見てみよう。' };
     if (q.type === 'order') return { ...q, support: true, prompt: q.blank === 0 ? `${q.a + 1}の ひとつ前は？` : `${q.answer - 1}の ひとつ次は？`, expression: q.blank === 0 ? `□ ← ${q.a + 1}` : `${q.answer - 1} → □` };
     return { ...q, support: true, prompt: q.compose ? '丸は ぜんぶで いくつ？' : '色のついていない丸は いくつ？', expression: '', hint: 'ひとつずつ、ゆっくり数えてみよう。' };
   }
-  function chooseType(stats, rng = Math.random, available = TYPES) {
+  function chooseType(stats, rng = Math.random, available = LEVEL1_TYPES) {
     const review = available.filter(t => (stats[t]?.misses || 0) > 0 && (stats[t]?.firstCorrectStreak || 0) < 3);
     const pool = review.length && rng() < .3 ? review : available;
     return pool[integer(0, pool.length - 1, rng)];
@@ -78,9 +86,11 @@
   function createState() { return { version: 3, total: 0, correct: 0, lastStudyDate: null, days: {}, types: Object.fromEntries(ALL_TYPES.map(t => [t, { total: 0, correct: 0, misses: 0 }])), recent: [], bright: 0, collection: Collection.create() }; }
   const count = n => Number.isSafeInteger(n) && n >= 0;
   function validState(s) {
-    const schemaTypes = s?.version === 1 ? TYPES : s?.version === 2 ? OLD_TYPES : ALL_TYPES;
+    const schemaTypes = s?.version === 1 ? TYPES : s?.version === 2 ? OLD_TYPES : BASE_TYPES;
     const base = [1, 2, 3].includes(s?.version) && count(s.total) && count(s.correct) && s.correct <= s.total && (s.lastStudyDate === null || /^\d{4}-\d{2}-\d{2}$/.test(s.lastStudyDate)) && s.days && typeof s.days === 'object' && !Array.isArray(s.days) && Object.entries(s.days).every(([d, n]) => /^\d{4}-\d{2}-\d{2}$/.test(d) && count(n)) && schemaTypes.every(t => s.types?.[t] && ['total', 'correct', 'misses'].every(k => count(s.types[t][k])) && s.types[t].correct <= s.types[t].total && (s.types[t].firstCorrectStreak === undefined || (count(s.types[t].firstCorrectStreak) && s.types[t].firstCorrectStreak <= 3)));
-    return Boolean(base && (s.version === 1 || (count(s.bright) && Array.isArray(s.recent) && s.recent.length <= 5 && s.recent.every(r => (s.version === 2 ? [1, 2] : [1, 2, 3]).includes(r.level) && count(r.correct) && r.correct <= 10))) && (s.version !== 3 || Collection.valid(s.collection)));
+    const frame = s?.types?.frameSee;
+    const validFrame = frame === undefined || (frame && ['total', 'correct', 'misses'].every(k => count(frame[k])) && frame.correct <= frame.total && (frame.firstCorrectStreak === undefined || (count(frame.firstCorrectStreak) && frame.firstCorrectStreak <= 3)));
+    return Boolean(base && validFrame && (s.version === 1 || (count(s.bright) && Array.isArray(s.recent) && s.recent.length <= 5 && s.recent.every(r => (s.version === 2 ? [1, 2] : [1, 2, 3]).includes(r.level) && count(r.correct) && r.correct <= 10))) && (s.version !== 3 || Collection.valid(s.collection)));
   }
   function migrate(s) {
     if (!validState(s)) throw new Error('Invalid saved history');
@@ -93,6 +103,7 @@
       next.version = 3; next.collection = Collection.create();
       THIRD_TYPES.forEach(t => { next.types[t] = { total: 0, correct: 0, misses: 0 }; });
     }
+    if (!next.types.frameSee) next.types.frameSee = { total: 0, correct: 0, misses: 0 };
     return next;
   }
   function bridgeReady(state) {
@@ -109,12 +120,12 @@
       for (let i = values.length - 1; i > 0; i--) { const j = integer(0, i, rng); [values[i], values[j]] = [values[j], values[i]]; }
       return values;
     };
-    if (level === 1) return [...shuffle([...TYPES]), ...Array.from({ length: 5 }, () => chooseType(state.types, rng))];
+    if (level === 1) return [...shuffle([...LEVEL1_TYPES]), ...Array.from({ length: 4 }, () => chooseType(state.types, rng))];
     if (level === 3) {
       const last = state.recent.filter(r => r.level === 3).at(-1);
       const gentle = last && last.correct <= 5;
       const pool = ['addBridge', 'subBridge', 'missingAdd', 'missingSub'];
-      return [...shuffle(['tens', 'sub20']), ...shuffle(['addBridge', 'subBridge']), ...shuffle(gentle ? ['complement', 'parts'] : ['missingAdd', 'missingSub']), ...Array.from({ length: 4 }, () => chooseType(state.types, rng, gentle ? ['add20', 'sub20', 'addBridge', 'subBridge'] : pool))];
+      return [...shuffle(['frameSee', 'sub20']), ...shuffle(['addBridge', 'subBridge']), ...shuffle(gentle ? ['complement', 'parts'] : ['missingAdd', 'missingSub']), ...Array.from({ length: 4 }, () => chooseType(state.types, rng, gentle ? ['add20', 'sub20', 'addBridge', 'subBridge'] : pool))];
     }
     const basic = ['tens', 'add20', 'sub20'];
     return [...shuffle(['complement', 'parts']), ...shuffle([...basic]), ...Array.from({ length: 3 }, () => chooseType(state.types, rng, basic)), ...(bridgeReady(state) ? shuffle(['addBridge', 'subBridge']) : Array.from({ length: 2 }, () => chooseType(state.types, rng, basic)))];
@@ -149,6 +160,7 @@
   // Hints reveal a cue, then the existing diagram, then an intermediate relation.
   function hints(q) {
     switch (q.type) {
+      case 'frameSee': return [q.hint, q.green ? '上の段の5こと、下の段をあわせよう。' : '緑と白をあわせると10になるよ。'];
       case 'addBridge': return ['10をつくれないかな？', `${q.a} ＋ ${10 - q.a} ＝ 10。${q.b}の のこりは${q.answer - 10}。`];
       case 'subBridge': return ['10のまとまりからひいてみよう。', `${q.a} ＝ 10 ＋ ${q.a - 10}。10 − ${q.b} ＝ ${10 - q.b}。あとは${q.a - 10}とあわせよう。`];
       case 'missingSub': return ['10のまとまりからひいて、分けておいた数とあわせよう。', `${q.total} ＝ 10 ＋ ${q.total - 10}。${q.result} ＝ ${q.result - (q.total - 10)} ＋ ${q.total - 10}。10 − □ ＝ ${q.result - (q.total - 10)}。`];
