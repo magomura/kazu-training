@@ -102,7 +102,7 @@ function moveDiagram(q, moved) {
 function renderMove() {
   const q = session.question;
   const moved = session.moved || 0, need = 10 - q.a, full = moved === need;
-  app.innerHTML = `<div class="session-top"><p>数をうつしてみよう</p><button id="stop" class="text-button">ここでおわる</button></div><section class="card question-card"><p class="eyebrow">ちいさなステップ 1 / 3</p><h1 tabindex="-1">${full ? '10に なった！' : 'オレンジを 1こずつ、白いところへ うつそう'}</h1><p class="note">${q.a} ＋ ${q.b}</p>${moveDiagram(q, moved)}<p id="move-status" class="note" role="status">${full ? `${moved}こ うつしたら、10になったね。のこりを たしかめよう。` : 'オレンジの丸をタップしてね。'}</p>${full ? '<button id="move-next" class="primary">のこりは いくつ？</button>' : ''}</section>`;
+  app.innerHTML = `<div class="session-top"><p>数をうつしてみよう</p><button id="stop" class="text-button">ここでおわる</button></div><section class="card question-card"><p class="eyebrow">ちいさなステップ 1 / 3</p><h1 tabindex="-1">${full ? '10に なった！' : 'オレンジを 1こずつ、白いところへ うつそう'}</h1><p class="move-expression">${q.a} ＋ ${q.b}</p>${moveDiagram(q, moved)}<p id="move-status" class="note" role="status">${full ? `${moved}こ うつしたら、10になったね。のこりを たしかめよう。` : 'オレンジの丸をタップしてね。'}</p>${full ? '<button id="move-next" class="primary">のこりは いくつ？</button>' : ''}</section>`;
   document.querySelector('#stop').onclick = () => finish(true);
   app.querySelectorAll('button.move-dot').forEach(button => { button.onclick = () => {
     // Ignore stale/rapid taps after the frame has filled.
