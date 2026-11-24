@@ -86,13 +86,25 @@ function visual(q) {
   const frames = Array.from({ length: Math.ceil(q.total / 10) }, (_, i) => `<div class="ten-frame">${dots.slice(i * 10, i * 10 + 10).join('')}</div>`).join('');
   return `<div class="visual" role="img" aria-label="${q.total}個の丸。${subtract ? `${q.b}個を線で消しています。` : `${q.a}個は緑色、残りは${q.compose ? 'オレンジ色' : '白'}です。`}">${frames}<p class="visual-caption">${subtract ? (bridge ? '10の枠ののこりと、となりの丸をあわせよう' : '線で消した丸を、とりのぞこう') : q.compose ? 'ふたつの色を、あわせてみよう' : '緑の丸と、白い丸'}${q.total >= 10 ? '<br>ひとつの枠に10個まで入るよ' : ''}</p></div>`;
 }
+function moveDiagram(q, moved) {
+  const full = q.a + moved === 10;
+  const frame = Array.from({ length: 10 }, (_, i) => {
+    const color = i < q.a ? 'filled' : i < q.a + moved ? 'other' : '';
+    return `<span class="dot ${color}"></span>`;
+  }).join('');
+  const orange = '<span class="dot other" aria-hidden="true"></span>';
+  const sourceDot = full
+    ? `<span class="move-dot">${orange}</span>`
+    : `<button type="button" class="move-dot" aria-label="オレンジの丸を1こ うつす">${orange}</button>`;
+  return `<div class="visual"><div class="ten-frame">${frame}</div><div class="move-source">${sourceDot.repeat(q.b - moved)}</div></div>`;
+}
 // An unscored, tap-only introduction before the numerical support steps.
 function renderMove() {
   const q = session.question;
   const moved = session.moved || 0, need = 10 - q.a, full = moved === need;
-  app.innerHTML = `<div class="session-top"><p>数をうつしてみよう</p><button id="stop" class="text-button">ここでおわる</button></div><section class="card question-card"><h1 tabindex="-1">${full ? '10に なった！' : 'オレンジを 1こずつ、白いところへ うつそう'}</h1><div class="visual"><div class="ten-frame">${Array.from({length:10}, (_,i) => `<span class="dot ${i < q.a ? 'filled' : i < q.a + moved ? 'other' : ''}"></span>`).join('')}</div><div class="move-source">${Array.from({length:q.b - moved}, (_,i) => `<button class="move-dot" aria-label="オレンジの丸を1こ うつす" ${full ? 'disabled' : ''}><span class="dot other" aria-hidden="true"></span></button>`).join('')}</div></div><p id="move-status" class="note" role="status">${full ? `${moved}こ うつしたら、10になったね。のこりを たしかめよう。` : 'オレンジの丸をタップしてね。'}</p>${full ? '<button id="move-next" class="primary">のこりは いくつ？</button>' : ''}</section>`;
+  app.innerHTML = `<div class="session-top"><p>数をうつしてみよう</p><button id="stop" class="text-button">ここでおわる</button></div><section class="card question-card"><p class="eyebrow">ちいさなステップ 1 / 3</p><h1 tabindex="-1">${full ? '10に なった！' : 'オレンジを 1こずつ、白いところへ うつそう'}</h1><p class="note">${q.a} ＋ ${q.b}</p>${moveDiagram(q, moved)}<p id="move-status" class="note" role="status">${full ? `${moved}こ うつしたら、10になったね。のこりを たしかめよう。` : 'オレンジの丸をタップしてね。'}</p>${full ? '<button id="move-next" class="primary">のこりは いくつ？</button>' : ''}</section>`;
   document.querySelector('#stop').onclick = () => finish(true);
-  app.querySelectorAll('.move-dot').forEach(button => { button.onclick = () => {
+  app.querySelectorAll('button.move-dot').forEach(button => { button.onclick = () => {
     // Ignore stale/rapid taps after the frame has filled.
     if (session.mode !== 'move' || session.moved >= need) return;
     session.moved++; renderMove();
@@ -108,19 +120,33 @@ function beginSupport() {
 }
 function renderQuestion() {
   const q = activeQuestion();
-  app.innerHTML = `<div class="session-top"><p>${session.mode === 'support' ? '数をたしかめよう' : `LEVEL 1 · ${session.done + 1} / 10問`}</p><button id="stop" class="text-button">ここでおわる</button></div><progress value="${session.done}" max="10" aria-label="今回の進みぐあい"></progress><section class="card question-card"><p class="eyebrow">${session.mode === 'support' ? 'ちいさなステップ' : '数となかよくなる'}</p><h1 tabindex="-1">${q.prompt}</h1>${q.expression ? `<p class="expression">${q.expression}</p>` : ''}<div id="hint">${session.mode === 'support' || q.alwaysVisual ? `${visual(q)}<p class="note">${q.hint}</p>` : ''}</div><form id="answer-form" novalidate><label class="input-label" for="answer">答えを数字で入れよう</label><input id="answer" name="answer" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" enterkeyhint="done" aria-describedby="input-error"><p id="input-error" class="input-error" role="alert" hidden></p><button class="primary" type="submit">答える</button></form><button id="show-hint" class="text-button" ${session.mode === 'support' ? 'hidden' : ''}>ヒントを見る</button><div id="feedback" aria-live="polite" aria-atomic="true"></div></section>`;
+  const support = session.mode === 'support';
+  const diagram = q.visual === 'moveRemainder'
+    ? moveDiagram(session.question, 10 - session.question.a)
+    : visual(q);
+  app.innerHTML = `<div class="session-top"><p>${session.mode === 'support' ? '数をたしかめよう' : `LEVEL 1 · ${session.done + 1} / 10問`}</p><button id="stop" class="text-button">ここでおわる</button></div><progress value="${session.done}" max="10" aria-label="今回の進みぐあい"></progress><section class="card question-card"><p class="eyebrow">${session.mode === 'support' ? 'ちいさなステップ' : '数となかよくなる'}</p><h1 tabindex="-1">${q.prompt}</h1>${q.expression ? `<p class="expression">${q.expression}</p>` : ''}<div id="hint">${support || q.alwaysVisual ? diagram : ''}${support && q.visual !== 'moveRemainder' ? `<p class="note">${q.hint}</p>` : ''}</div><form id="answer-form" novalidate><label class="input-label" for="answer">答えを数字で入れよう</label><input id="answer" name="answer" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" enterkeyhint="done" aria-describedby="input-error"><p id="input-error" class="input-error" role="alert" hidden></p><button class="primary" type="submit">答える</button></form><button id="show-hint" class="text-button" ${session.mode === 'support' ? 'hidden' : ''}>ヒントを見る</button><div id="feedback" aria-live="polite" aria-atomic="true"></div></section>`;
   document.querySelector('#answer-form').onsubmit = submit;
   app.querySelector('.session-top p').textContent = session.mode === 'support' ? '数をたしかめよう' : `LEVEL ${session.level} · ${session.done + 1} / 10問`;
   app.querySelector('.question-card .eyebrow').textContent = session.mode === 'support' ? `ちいさなステップ ${session.supportIndex + 1} / ${Kazu.supportSteps(session.question).length}` : Kazu.LABELS[q.type];
   document.querySelector('#stop').onclick = () => finish(true);
   let hintStage = 0;
   const [cue, intermediate] = Kazu.hints(q);
-  document.querySelector('#hint').setAttribute('aria-live', 'polite');
-  document.querySelector('#show-hint').onclick = () => {
+  const hint = document.querySelector('#hint');
+  const hintButton = document.querySelector('#show-hint');
+  hint.setAttribute('aria-live', 'polite');
+  hintButton.onclick = () => {
     hintStage++;
-    document.querySelector('#hint').innerHTML = `<p class="note">${cue}</p>` + (hintStage >= 2 || q.alwaysVisual ? visual(q) : '') + (hintStage >= 3 ? `<p class="note">${intermediate}</p>` : '');
-    document.querySelector('#show-hint').textContent = hintStage === 1 ? '図を見る' : '途中の式を見る';
-    document.querySelector('#show-hint').hidden = hintStage >= 3;
+    if (q.alwaysVisual) {
+      hint.innerHTML = diagram + `<p class="note">${cue}</p>`
+        + (hintStage === 2 ? `<p class="note">${intermediate}</p>` : '');
+      hintButton.textContent = '考え方を見る';
+      hintButton.hidden = hintStage === 2;
+      return;
+    }
+    hint.innerHTML = `<p class="note">${cue}</p>` + (hintStage >= 2 ? visual(q) : '')
+      + (hintStage === 3 ? `<p class="note">${intermediate}</p>` : '');
+    hintButton.textContent = hintStage === 1 ? '図を見る' : '途中の式を見る';
+    hintButton.hidden = hintStage === 3;
   };
   // Heading focus gives screen readers context without opening the iPhone keyboard.
   app.querySelector('h1').focus({ preventScroll: true });
