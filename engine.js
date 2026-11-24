@@ -16,7 +16,7 @@
   function generate(type, rng = Math.random) {
     if (type === 'frameSee') {
       const a = integer(5, 9, rng), green = rng() < .5;
-      return { type, a, total: 10, green, answer: green ? a : 10 - a, prompt: green ? '緑は いくつ？' : '白は いくつ？', expression: '', visual: 'frame', alwaysVisual: true, hint: green ? '上の段は5こ。下の緑とあわせよう。' : '白い丸を、ゆっくりたしかめよう。', explanation: green ? `緑は、5と${a-5}で${a}こ。` : `緑${a}こと白${10-a}こで10になるね。` };
+      return { type, a, total: 10, green, answer: green ? a : 10 - a, prompt: green ? '緑は いくつ？' : '白は いくつ？', expression: '', visual: 'frame', alwaysVisual: true, hint: green ? '上の段は5こ。下の緑とあわせよう。' : '上の段は ぜんぶ緑。下の段の白を見よう。', explanation: green ? `緑は、5と${a-5}で${a}こ。` : `緑${a}こと白${10-a}こで10になるね。` };
     }
     if (THIRD_TYPES.includes(type)) {
       const base = generateNext(type === 'missingAdd' ? 'addBridge' : 'subBridge', rng);
@@ -76,7 +76,7 @@
     return [support(q)];
   }
   function support(q) {
-    if (q.type === 'frameSee') return { ...q, support: true, prompt: q.green ? '緑の丸を たしかめよう' : '白い丸を たしかめよう' };
+    if (q.type === 'frameSee') return { ...q, support: true, hint: 'ひとつずつ、ゆっくり数えてみよう。', prompt: q.green ? '緑の丸を たしかめよう' : '白い丸を たしかめよう' };
     if (THIRD_TYPES.includes(q.type)) return q.prerequisite;
     if (NEXT_TYPES.includes(q.type)) return q.prerequisite;
     if (q.type === 'compare') return { ...q, support: true, prompt: `${q.bigger ? '右' : '左'}にある数は どっち？`, hint: '数の線の位置を見てみよう。' };
@@ -165,7 +165,7 @@
   // Hints reveal a cue, then the existing diagram, then an intermediate relation.
   function hints(q) {
     switch (q.type) {
-      case 'frameSee': return [q.hint, q.green ? '上の段の5こと、下の段をあわせよう。' : '緑と白をあわせると10になるよ。'];
+      case 'frameSee': return [q.hint, q.green ? '5に、下の段の緑の数を足そう。' : '下の段は5この枠だよ。緑があるところをのぞくと、白はいくつぶんかな？'];
       case 'addBridge': return ['10をつくれないかな？', `${q.a} ＋ ${10 - q.a} ＝ 10。${q.b}の のこりは${q.answer - 10}。`];
       case 'subBridge': return ['10のまとまりからひいてみよう。', `${q.a} ＝ 10 ＋ ${q.a - 10}。10 − ${q.b} ＝ ${10 - q.b}。あとは${q.a - 10}とあわせよう。`];
       case 'missingSub': return ['10のまとまりからひいて、分けておいた数とあわせよう。', `${q.total} ＝ 10 ＋ ${q.total - 10}。${q.result} ＝ ${q.result - (q.total - 10)} ＋ ${q.total - 10}。10 − □ ＝ ${q.result - (q.total - 10)}。`];

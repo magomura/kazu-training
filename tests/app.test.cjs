@@ -67,3 +67,37 @@ test('I-2 taps conserve dots, never score, and stop when ten is full', () => {
   assert.equal(run('session.mode'),'support');
   assert.equal(run('activeQuestion().answer'),3);
 });
+
+test('J-1 and J-2 keep the completed diagram and show the original sum during transfer', () => {
+  const { node, run } = harness();
+  run("session.question = {...Kazu.generate('addBridge'), a:5, b:9, answer:14, total:14}; beginSupport();");
+  assert.match(node('#app').innerHTML, /ちいさなステップ 1 \/ 3/);
+  assert.match(node('#app').innerHTML, /5 ＋ 9/);
+  for (let i = 0; i < 5; i++) node('move0').onclick();
+  const completeDiagram = run('moveDiagram(session.question, session.moved)');
+  assert.ok(node('#app').innerHTML.includes(completeDiagram));
+  node('#move-next').onclick();
+  assert.ok(node('#app').innerHTML.includes(completeDiagram));
+  assert.match(node('#app').innerHTML, /のこりは いくつ？/);
+  assert.equal(run('activeQuestion().answer'), 4);
+  assert.equal(run('Kazu.supportSteps(session.question)[2].expression'), '10 ＋ 4 ＝ □');
+});
+
+test('J-3 and J-4 show the frame before either hint and skip the diagram hint stage', () => {
+  const { node, run } = harness();
+  for (const green of [true, false]) {
+    run(`session.question = Kazu.generate('frameSee', (() => { const values = [.6, ${green ? 0 : .9}]; return () => values.shift(); })()); renderQuestion();`);
+    assert.match(node('#app').innerHTML, /id="hint"><div class="visual"/);
+    assert.ok(!node('#app').innerHTML.includes(run('session.question.hint')));
+    node('#show-hint').onclick();
+    assert.match(node('#hint').innerHTML, /ten-frame/);
+    assert.ok(node('#hint').innerHTML.includes(run('session.question.hint')));
+    assert.equal(node('#show-hint').textContent, '考え方を見る');
+    assert.equal(node('#show-hint').hidden, false);
+    node('#show-hint').onclick();
+    assert.ok(node('#hint').innerHTML.includes(run('Kazu.hints(session.question)[1]')));
+    assert.equal(node('#show-hint').hidden, true);
+  }
+  assert.match(run('session.question.hint'), /下の段の白/);
+  assert.match(run('Kazu.support(session.question).hint'), /ゆっくり数えて/);
+});
