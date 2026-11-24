@@ -118,7 +118,7 @@ const path = require('node:path');
   let supportAnswer = await page.evaluate(() => Kazu.support(session.question).answer);
   assert.notEqual(mainAnswer, supportAnswer);
   await page.locator('#answer').fill('0'); await page.locator('#answer-form button').click(); await page.locator('#continue').click();
-  while (await page.locator('.move-dot:not(:disabled)').count()) await page.locator('.move-dot:not(:disabled)').first().click();
+  while (await page.locator('button.move-dot').count()) await page.locator('button.move-dot').first().click();
   await page.locator('#move-next').click();
   supportAnswer = await page.evaluate(() => activeQuestion().answer);
   await page.locator('#answer').fill(String(supportAnswer)); await page.locator('#answer-form button').click();
@@ -271,7 +271,7 @@ const path = require('node:path');
     const beforeMove = await page.evaluate(() => JSON.stringify(history));
     assert.equal(await page.locator('.ten-frame .other').count(),0);
     for(let i=0;i<2;i++) {
-      const target = page.locator('.move-dot:not(:disabled)').first();
+      const target = page.locator('button.move-dot').first();
       const size = await target.boundingBox(); assert.ok(size.width>=44 && size.height>=44);
       await target.click();
       assert.equal(await page.locator('.ten-frame .other').count(),i+1);
