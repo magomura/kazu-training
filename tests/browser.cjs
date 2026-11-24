@@ -115,9 +115,12 @@ const path = require('node:path');
   // Crucial regression: prerequisite answer (2) differs from main answer (13).
   await page.evaluate(() => { session.question = { ...Kazu.generate('addBridge', () => .9) }; renderQuestion(); });
   const mainAnswer = await page.evaluate(() => session.question.answer);
-  const supportAnswer = await page.evaluate(() => Kazu.support(session.question).answer);
+  let supportAnswer = await page.evaluate(() => Kazu.support(session.question).answer);
   assert.notEqual(mainAnswer, supportAnswer);
   await page.locator('#answer').fill('0'); await page.locator('#answer-form button').click(); await page.locator('#continue').click();
+  while (await page.locator('.move-dot:not(:disabled)').count()) await page.locator('.move-dot:not(:disabled)').first().click();
+  await page.locator('#move-next').click();
+  supportAnswer = await page.evaluate(() => activeQuestion().answer);
   await page.locator('#answer').fill(String(supportAnswer)); await page.locator('#answer-form button').click();
   assert.match(await page.locator('#feedback').innerText(), /そう、その数/);
   assert.equal(await page.evaluate(() => history.total), 40);
@@ -260,6 +263,31 @@ const path = require('node:path');
   await page.locator('#answer').fill('6'); await page.locator('#answer-form button').click();
   await page.locator('#continue').click();
   assert.equal(await page.locator('#hint').innerText(), '');
+  // I-2 tap-only support and I-1 permanent frames at narrow iPhone widths.
+  for (const width of [320,390,430]) {
+    await page.setViewportSize({width,height:844});
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await page.evaluate(() => { start(3); session.question = {...Kazu.generate('addBridge'),a:8,b:5,answer:13,total:13}; session.mistakes=1; beginSupport(); });
+    const beforeMove = await page.evaluate(() => JSON.stringify(history));
+    assert.equal(await page.locator('.ten-frame .other').count(),0);
+    for(let i=0;i<2;i++) {
+      const target = page.locator('.move-dot:not(:disabled)').first();
+      const size = await target.boundingBox(); assert.ok(size.width>=44 && size.height>=44);
+      await target.click();
+      assert.equal(await page.locator('.ten-frame .other').count(),i+1);
+    }
+    assert.equal(await page.locator('.move-source .dot').count(),3);
+    assert.equal(await page.evaluate(() => JSON.stringify(history)),beforeMove);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth<=innerWidth));
+    await page.locator('#move-next').click();
+    assert.equal(await page.evaluate(() => activeQuestion().answer),3);
+    await page.evaluate(() => { session.mode='main';session.question=Kazu.generate('frameSee');renderQuestion(); });
+    assert.equal(await page.locator('.ten-frame .dot').count(),10);
+    await page.locator('#show-hint').click();
+    assert.equal(await page.locator('.ten-frame .dot').count(),10);
+    assert.equal(await page.locator('.expression').count(),0);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth<=innerWidth));
+  }
   // Corrupt stored data is not silently overwritten.
   await page.evaluate(() => localStorage.setItem(KEY, '{bad'));
   await page.reload();

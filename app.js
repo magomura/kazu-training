@@ -108,7 +108,7 @@ function beginSupport() {
 }
 function renderQuestion() {
   const q = activeQuestion();
-  app.innerHTML = `<div class="session-top"><p>${session.mode === 'support' ? '数をたしかめよう' : `LEVEL 1 · ${session.done + 1} / 10問`}</p><button id="stop" class="text-button">ここでおわる</button></div><progress value="${session.done}" max="10" aria-label="今回の進みぐあい"></progress><section class="card question-card"><p class="eyebrow">${session.mode === 'support' ? 'ちいさなステップ' : '数となかよくなる'}</p><h1 tabindex="-1">${q.prompt}</h1>${q.expression ? `<p class="expression">${q.expression}</p>` : ''}<div id="hint">${session.mode === 'support' ? `${visual(q)}<p class="note">${q.hint}</p>` : ''}</div><form id="answer-form" novalidate><label class="input-label" for="answer">答えを数字で入れよう</label><input id="answer" name="answer" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" enterkeyhint="done" aria-describedby="input-error"><p id="input-error" class="input-error" role="alert" hidden></p><button class="primary" type="submit">答える</button></form><button id="show-hint" class="text-button" ${session.mode === 'support' ? 'hidden' : ''}>ヒントを見る</button><div id="feedback" aria-live="polite" aria-atomic="true"></div></section>`;
+  app.innerHTML = `<div class="session-top"><p>${session.mode === 'support' ? '数をたしかめよう' : `LEVEL 1 · ${session.done + 1} / 10問`}</p><button id="stop" class="text-button">ここでおわる</button></div><progress value="${session.done}" max="10" aria-label="今回の進みぐあい"></progress><section class="card question-card"><p class="eyebrow">${session.mode === 'support' ? 'ちいさなステップ' : '数となかよくなる'}</p><h1 tabindex="-1">${q.prompt}</h1>${q.expression ? `<p class="expression">${q.expression}</p>` : ''}<div id="hint">${session.mode === 'support' || q.alwaysVisual ? `${visual(q)}<p class="note">${q.hint}</p>` : ''}</div><form id="answer-form" novalidate><label class="input-label" for="answer">答えを数字で入れよう</label><input id="answer" name="answer" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" enterkeyhint="done" aria-describedby="input-error"><p id="input-error" class="input-error" role="alert" hidden></p><button class="primary" type="submit">答える</button></form><button id="show-hint" class="text-button" ${session.mode === 'support' ? 'hidden' : ''}>ヒントを見る</button><div id="feedback" aria-live="polite" aria-atomic="true"></div></section>`;
   document.querySelector('#answer-form').onsubmit = submit;
   app.querySelector('.session-top p').textContent = session.mode === 'support' ? '数をたしかめよう' : `LEVEL ${session.level} · ${session.done + 1} / 10問`;
   app.querySelector('.question-card .eyebrow').textContent = session.mode === 'support' ? `ちいさなステップ ${session.supportIndex + 1} / ${Kazu.supportSteps(session.question).length}` : Kazu.LABELS[q.type];
@@ -118,7 +118,7 @@ function renderQuestion() {
   document.querySelector('#hint').setAttribute('aria-live', 'polite');
   document.querySelector('#show-hint').onclick = () => {
     hintStage++;
-    document.querySelector('#hint').innerHTML = `<p class="note">${cue}</p>` + (hintStage >= 2 ? visual(q) : '') + (hintStage >= 3 ? `<p class="note">${intermediate}</p>` : '');
+    document.querySelector('#hint').innerHTML = `<p class="note">${cue}</p>` + (hintStage >= 2 || q.alwaysVisual ? visual(q) : '') + (hintStage >= 3 ? `<p class="note">${intermediate}</p>` : '');
     document.querySelector('#show-hint').textContent = hintStage === 1 ? '図を見る' : '途中の式を見る';
     document.querySelector('#show-hint').hidden = hintStage >= 3;
   };

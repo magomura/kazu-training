@@ -18,8 +18,8 @@ test('review gives an often missed type a modest, measurable preference', () => 
   const s = K.createState(); s.types.complement.misses = 4;
   const rng = seeded(); let n = 0;
   for (let i = 0; i < 20000; i++) n += K.chooseType(s.types, rng) === 'complement';
-  // 30% dedicated review + 70% uniform (1/5) = 44%.
-  assert.ok(n / 20000 > .42 && n / 20000 < .46);
+  // 30% dedicated review + 70% uniform (1/6) = 41.7%.
+  assert.ok(n / 20000 > .40 && n / 20000 < .44);
 });
 test('records main questions once, first-answer correctness and per-type misses', () => {
   const s = K.createState(), q = K.generate('parts', seeded());
@@ -130,4 +130,25 @@ test('mistake cues distinguish operations, blanks, offsets and complements', () 
   assert.match(K.mistakeHint({ type: 'addBridge', answer: 13 }, 12), /1つずつ/);
   assert.match(K.mistakeHint({ type: 'complement', answer: 5 }, 0), /白い丸/);
   for (const type of K.ALL_TYPES) assert.equal(K.hints(K.generate(type)).length, 2);
+});
+test('frameSee shows 5–9 green dots and preserves old v3 histories', () => {
+  const rng = seeded(19);
+  for (let i = 0; i < 1000; i++) {
+    const q = K.generate('frameSee', rng);
+    assert.ok(q.a >= 5 && q.a <= 9); assert.equal(q.total, 10);
+    assert.equal(q.answer, q.green ? q.a : 10-q.a);
+    assert.equal(K.support(q).answer, q.answer); assert.ok(q.alwaysVisual);
+    assert.equal(q.expression, '');
+  }
+  const old = K.createState(); delete old.types.frameSee;
+  old.total = 80; old.correct = 70; old.collection.owned = ['place-0'];
+  const before = JSON.stringify(old), next = K.migrate(old);
+  assert.equal(JSON.stringify(old), before); assert.equal(next.version, 3);
+  assert.deepEqual(next.collection, old.collection); assert.equal(next.total, 80);
+  assert.deepEqual(next.types.frameSee, {total:0,correct:0,misses:0});
+  for (const level of [1,3]) {
+    const plan = K.schedule(next, level, rng); assert.equal(plan.length, 10);
+    assert.ok((level === 3 ? plan.slice(0,2) : plan).includes('frameSee'));
+  }
+  next.types.frameSee.correct = -1; assert.equal(K.validState(next), false);
 });

@@ -6,7 +6,7 @@ const Kazu = require('../engine.js');
 const Collection = require('../collection.js');
 function harness() {
   const nodes = new Map();
-  const node = key => { if (!nodes.has(key)) nodes.set(key, { innerHTML: '', textContent: '', hidden: false, value: '', setAttribute() {}, removeAttribute() {}, focus() {}, blur() {}, querySelector: node }); return nodes.get(key); };
+  const node = key => { if (!nodes.has(key)) nodes.set(key, { innerHTML: '', textContent: '', hidden: false, value: '', setAttribute() {}, removeAttribute() {}, focus() {}, blur() {}, querySelector: node, querySelectorAll: () => Array.from({length:(nodes.get('#app').innerHTML.match(/class="move-dot"/g)||[]).length}, (_,i) => node('move'+i)) }); return nodes.get(key); };
   const context = vm.createContext({ Kazu, Collection, document: { querySelector: node }, localStorage: { getItem: () => null, setItem() {} } });
   vm.runInContext(fs.readFileSync(require.resolve('../app.js'), 'utf8').replace(/home\(\);\s*$/, ''), context);
   const run = code => vm.runInContext(code, context);
@@ -52,4 +52,18 @@ test('F-1 keeps the same remaining positions in main and support ten frames', ()
     assert.deepEqual(blank.map(c => c === 'filled'), main.map(c => c === 'filled'));
     assert.equal(blank.filter(c => c === '').length, b);
   }
+});
+
+test('I-2 taps conserve dots, never score, and stop when ten is full', () => {
+  const {node,run} = harness();
+  run("session.question={...Kazu.generate('addBridge'),a:8,b:5,answer:13,total:13}; beginSupport();");
+  const before = run('JSON.stringify(history)');
+  node('move0').onclick(); assert.equal(run('session.moved'),1);
+  node('move0').onclick(); node('move0').onclick();
+  assert.equal(run('session.moved'),2);
+  assert.equal(run('JSON.stringify(history)'),before);
+  assert.match(node('#app').innerHTML,/10に なった/);
+  node('#move-next').onclick();
+  assert.equal(run('session.mode'),'support');
+  assert.equal(run('activeQuestion().answer'),3);
 });
